@@ -21,13 +21,15 @@ app.use(errorHandler);
 async function startServer(): Promise<void> {
   try {
     await analyticsService.refreshData();
-    app.listen(config.port, () => {
-      console.log(`Server started on port ${config.port}`);
-    });
+    console.log('Initial data refresh successful');
   } catch (error) {
-    console.error('Server startup failed:', error);
-    process.exit(1);
+    console.error('Initial data refresh failed:', (error as Error).message);
+    // Continue starting the server; the middleware will handle subsequent refreshes
   }
+
+  app.listen(config.port, () => {
+    console.log(`Server started on port ${config.port}`);
+  });
 }
 
 startServer();

@@ -9,34 +9,27 @@ export class AnalyticsService {
   private httpClient: AxiosInstance;
 
   constructor() {
+    console.log('Using access token:', config.accessToken); // Log the token being used
     this.httpClient = axios.create({
       baseURL: config.testServerUrl,
       timeout: config.requestTimeoutMs,
+      headers: {
+        Authorization: `Bearer ${config.accessToken}`,
+      },
     });
   }
 
-  /**
-   * Checks if data needs to be refreshed based on the configured interval
-   * @returns {boolean} Whether a refresh is needed
-   */
   private needsRefresh(): boolean {
     return Date.now() - this.lastUpdateTimestamp > config.refreshIntervalMs;
   }
 
-  /**
-   * Public method to determine if data should be refreshed
-   * @returns {Promise<boolean>} Whether a refresh is needed
-   */
   public async shouldRefresh(): Promise<boolean> {
     return this.needsRefresh();
   }
 
-  /**
-   * Fetches and updates analytics data from the test server
-   * @throws {Error} If data refresh fails
-   */
   public async refreshData(): Promise<void> {
     try {
+      console.log('Fetching users from test server...');
       const usersResponse = await this.httpClient.get('/users');
       const usersData = usersResponse.data.users;
 
@@ -46,6 +39,7 @@ export class AnalyticsService {
 
       await Promise.all(
         Array.from(this.users.values()).map(async (user) => {
+          console.log(`Fetching posts for user ${user.id}...`);
           const postsResponse = await this.httpClient.get(`/users/${user.id}/posts`);
           const userPosts: Post[] = postsResponse.data.posts;
 
@@ -53,6 +47,7 @@ export class AnalyticsService {
 
           await Promise.all(
             userPosts.map(async (post) => {
+              console.log(`Fetching comments for post ${post.id}...`);
               const commentsResponse = await this.httpClient.get(`/posts/${post.id}/comments`);
               const timestamp = Date.now();
 
@@ -69,25 +64,26 @@ export class AnalyticsService {
 
       this.lastUpdateTimestamp = Date.now();
     } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+        });
+        throw new Error(
+          `Data refresh failed: Request failed with status code ${error.response?.status} - ${error.response?.statusText}`
+        );
+      }
       throw new Error(`Data refresh failed: ${(error as Error).message}`);
     }
   }
 
-  /**
-   * Gets the top 5 users by post count
-   * @returns {User[]} Array of top users
-   */
   public getTopUsers(): User[] {
     return Array.from(this.users.values())
       .sort((a, b) => (b.postCount || 0) - (a.postCount || 0))
       .slice(0, 5);
   }
 
-  /**
-   * Gets posts based on the specified type
-   * @param type - 'popular' or 'latest'
-   * @returns {Post[]} Array of posts
-   */
   public getPosts(type: 'popular' | 'latest'): Post[] {
     const postsArray = Array.from(this.posts.values());
 
